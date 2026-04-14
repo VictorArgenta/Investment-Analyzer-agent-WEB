@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Investment Research Terminal</title>
+    <style>
+        :root {
+            --bg: #000000;
+            --bg-panel: #0a0a0a;
+            --bg-panel-alt: #111113;
+            --border: #1f1f22;
+            --border-strong: #2a2a2e;
+            --text: #e8e8e8;
+            --text-dim: #8a8a8a;
+            --text-muted: #5a5a5a;
+            --accent: #ff8a00;
+            --accent-dim: #a85700;
+            --green: #00d97e;
+            --red: #ff3b3b;
+            --blue: #3ea1ff;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'SF Mono', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        .terminal {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            min-height: 100vh;
+        }
+
+        /* ---------- Header ---------- */
+        header {
+            border-bottom: 1px solid var(--border-strong);
+            padding: 14px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .brand .logo {
+            width: 10px; height: 10px; background: var(--accent);
+            box-shadow: 0 0 12px var(--accent);
+        }
+        .brand h1 {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--text);
+        }
+        .brand span.sub {
+            color: var(--text-muted);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+        .header-meta {
+            color: var(--text-dim);
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+        .header-meta .dot {
+            display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+            background: var(--green); margin-right: 6px;
+            box-shadow: 0 0 6px var(--green);
+        }
+
+        /* ---------- Main ---------- */
+        main {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 1px;
+            background: var(--border);
+        }
+        @media (max-width: 900px) {
+            main { grid-template-columns: 1fr; }
+        }
+
+        .panel {
+            background: var(--bg-panel);
+            padding: 22px 24px;
+            overflow: auto;
+        }
+        .panel h2 {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-strong);
+        }
+
+        /* ---------- Formulario ---------- */
+        .form-block { margin-bottom: 26px; }
+        label {
+            display: block;
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        input[type="text"] {
+            width: 100%;
+            background: #050505;
+            border: 1px solid var(--border-strong);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 18px;
+            letter-spacing: 0.1em;
+            padding: 14px 14px;
+            outline: none;
+            text-transform: uppercase;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        input[type="text"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent);
+        }
+
+        button {
+            width: 100%;
+            background: var(--accent);
+            color: #000;
+            border: 0;
+            padding: 13px;
+            margin-top: 14px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        button:hover:not(:disabled) { background: #ffa733; }
+        button:disabled {
+            background: var(--border-strong);
+            color: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        /* ---------- Steps / progreso ---------- */
+        .progress-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 14px;
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+        .progress-meta .status-pill {
+            color: var(--accent);
+        }
+        .progress-meta .status-pill.idle { color: var(--text-muted); }
+        .progress-meta .status-pill.running { color: var(--accent); }
+        .progress-meta .status-pill.done { color: var(--green); }
+        .progress-meta .status-pill.error { color: var(--red); }
+
+        #steps {
+            font-size: 11.5px;
+            max-height: 60vh;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .step {
+            display: grid;
+            grid-template-columns: 60px 80px 1fr;
+            gap: 10px;
+            padding: 7px 0;
+            border-bottom: 1px dashed var(--border);
+            align-items: flex-start;
+        }
+        .step .ts { color: var(--text-muted); font-size: 10px; padding-top: 2px; }
+        .step .tag {
+            font-size: 9px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border: 1px solid var(--border-strong);
+            text-align: center;
+            height: fit-content;
+        }
+        .tag-step { color: var(--text-dim); }
+        .tag-tool_use { color: var(--accent); border-color: var(--accent-dim); }
+        .tag-tool_result { color: var(--blue); border-color: var(--blue); }
+        .tag-thinking { color: var(--text); border-color: var(--border-strong); }
+        .tag-done { color: var(--green); border-color: var(--green); }
+        .tag-error { color: var(--red); border-color: var(--red); }
+        .step .msg { color: var(--text); word-break: break-word; }
+        .step.tool_use .msg { color: var(--accent); }
+        .step.tool_result .msg { color: var(--blue); }
+        .step.thinking .msg { color: var(--text-dim); font-style: italic; }
+        .step.error .msg { color: var(--red); }
+
+        /* ---------- Informe ---------- */
+        .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-strong);
+        }
+        .report-header h2 {
+            border: 0; padding: 0; margin: 0;
+        }
+        .report-header .meta {
+            color: var(--text-muted);
+            font-size: 10px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+
+        #report {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Inter', 'Helvetica Neue', -apple-system, sans-serif;
+            font-size: 13.5px;
+            line-height: 1.7;
+            color: var(--text);
+            padding: 10px 4px 40px 4px;
+        }
+        #report.empty {
+            color: var(--text-muted);
+            font-style: italic;
+            font-family: inherit;
+            font-size: 12px;
+            letter-spacing: 0.1em;
+        }
+
+        /* Spinner en el header */
+        .spinner {
+            display: none;
+            width: 10px; height: 10px;
+            border: 2px solid var(--accent-dim);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        .spinner.active { display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Footer */
+        footer {
+            padding: 10px 24px;
+            border-top: 1px solid var(--border-strong);
+            color: var(--text-muted);
+            font-size: 10px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            background: #050505;
+        }
+
+        /* Scrollbar dark */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #050505; }
+        ::-webkit-scrollbar-thumb { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+    </style>
+</head>
+<body>
+<div class="terminal">
+    <header>
+        <div class="brand">
+            <div class="logo"></div>
+            <h1>Investment Research Terminal</h1>
+            <span class="sub">· Equity Research AI</span>
+        </div>
+        <div class="header-meta">
+            <span class="dot"></span><span id="session-status">READY</span>
+        </div>
+    </header>
+
+    <main>
+        <!-- Panel izquierdo: formulario + pasos -->
+        <section class="panel">
+            <div class="form-block">
+                <h2>Consulta</h2>
+                <form id="analyze-form">
+                    <label for="ticker">Ticker</label>
+                    <input
+                        id="ticker"
+                        name="ticker"
+                        type="text"
+                        placeholder="AAPL, MSFT, NVDA…"
+                        maxlength="10"
+                        autocomplete="off"
+                        required
+                    />
+                    <button id="submit-btn" type="submit">Lanzar Research</button>
+                </form>
+            </div>
+
+            <div>
+                <h2>Agent Log<span class="spinner" id="spinner"></span></h2>
+                <div class="progress-meta">
+                    <span>Eventos: <strong id="event-count">0</strong></span>
+                    <span class="status-pill idle" id="status-pill">IDLE</span>
+                </div>
+                <div id="steps"></div>
+            </div>
+        </section>
+
+        <!-- Panel derecho: informe -->
+        <section class="panel">
+            <div class="report-header">
+                <h2>Research Report</h2>
+                <div class="meta"><span id="report-ticker">—</span> · <span id="report-time">—</span></div>
+            </div>
+            <div id="report" class="empty">
+                Introduce un ticker y pulsa "Lanzar Research" para comenzar.
+                El informe final aparecerá aquí cuando el agente termine.
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <span>Powered by Claude · web_search</span>
+        <span id="clock">—</span>
+    </footer>
+</div>
+
+<script>
+(function () {
+    const form = document.getElementById('analyze-form');
+    const input = document.getElementById('ticker');
+    const btn = document.getElementById('submit-btn');
+    const stepsEl = document.getElementById('steps');
+    const reportEl = document.getElementById('report');
+    const spinner = document.getElementById('spinner');
+    const statusPill = document.getElementById('status-pill');
+    const sessionStatus = document.getElementById('session-status');
+    const eventCount = document.getElementById('event-count');
+    const reportTicker = document.getElementById('report-ticker');
+    const reportTime = document.getElementById('report-time');
+    const clockEl = document.getElementById('clock');
+
+    let currentES = null;
+    let counter = 0;
+
+    function updateClock() {
+        const d = new Date();
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        const ss = String(d.getSeconds()).padStart(2, '0');
+        clockEl.textContent = `${hh}:${mm}:${ss}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function setStatus(mode, label) {
+        statusPill.className = 'status-pill ' + mode;
+        statusPill.textContent = label;
+        sessionStatus.textContent = label;
+    }
+
+    function tsNow() {
+        const d = new Date();
+        return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+    }
+
+    function addStep(event) {
+        counter += 1;
+        eventCount.textContent = counter;
+
+        const row = document.createElement('div');
+        row.className = 'step ' + event.type;
+
+        const ts = document.createElement('div');
+        ts.className = 'ts';
+        ts.textContent = tsNow();
+
+        const tag = document.createElement('div');
+        tag.className = 'tag tag-' + event.type;
+        tag.textContent = event.type.replace('_', ' ');
+
+        const msg = document.createElement('div');
+        msg.className = 'msg';
+        msg.textContent = event.message || '';
+
+        row.appendChild(ts);
+        row.appendChild(tag);
+        row.appendChild(msg);
+        stepsEl.appendChild(row);
+        stepsEl.scrollTop = stepsEl.scrollHeight;
+    }
+
+    function resetUI(ticker) {
+        counter = 0;
+        eventCount.textContent = '0';
+        stepsEl.innerHTML = '';
+        reportEl.className = '';
+        reportEl.textContent = `Analizando ${ticker}…`;
+        reportTicker.textContent = ticker;
+        reportTime.textContent = tsNow();
+        spinner.classList.add('active');
+        setStatus('running', 'RUNNING');
+        btn.disabled = true;
+        btn.textContent = 'Analizando…';
+    }
+
+    function finishUI(mode, label) {
+        spinner.classList.remove('active');
+        setStatus(mode, label);
+        btn.disabled = false;
+        btn.textContent = 'Lanzar Research';
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const ticker = input.value.trim().toUpperCase();
+        if (!ticker) return;
+
+        if (currentES) {
+            try { currentES.close(); } catch (_) {}
+            currentES = null;
+        }
+
+        resetUI(ticker);
+
+        let sessionId;
+        try {
+            const res = await fetch('/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticker })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ error: 'Error desconocido' }));
+                throw new Error(err.error || `HTTP ${res.status}`);
+            }
+            const payload = await res.json();
+            sessionId = payload.session_id;
+        } catch (err) {
+            addStep({ type: 'error', message: err.message });
+            reportEl.className = 'empty';
+            reportEl.textContent = 'No se pudo iniciar el análisis.';
+            finishUI('error', 'ERROR');
+            return;
+        }
+
+        const es = new EventSource(`/stream/${sessionId}`);
+        currentES = es;
+
+        es.onmessage = (ev) => {
+            let event;
+            try { event = JSON.parse(ev.data); } catch (_) { return; }
+
+            if (event.type === 'done') {
+                addStep({ type: 'done', message: `Informe generado (${event.iterations || '?'} iteraciones)` });
+                reportEl.className = '';
+                reportEl.textContent = event.report || '(informe vacío)';
+                reportTime.textContent = tsNow();
+                finishUI('done', 'DONE');
+                es.close();
+                currentES = null;
+                return;
+            }
+
+            if (event.type === 'error') {
+                addStep({ type: 'error', message: event.message });
+                reportEl.className = 'empty';
+                reportEl.textContent = 'El análisis falló. Revisa el log de eventos.';
+                finishUI('error', 'ERROR');
+                es.close();
+                currentES = null;
+                return;
+            }
+
+            addStep(event);
+        };
+
+        es.onerror = () => {
+            addStep({ type: 'error', message: 'Conexión SSE interrumpida' });
+            finishUI('error', 'DISCONNECTED');
+            try { es.close(); } catch (_) {}
+            currentES = null;
+        };
+    });
+})();
+</script>
+</body>
+</html>
