@@ -8,6 +8,7 @@ import os
 import queue
 import re
 import threading
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -229,12 +230,23 @@ def run_agent_anthropic(ticker: str, model_name: str, session_id: str, q: queue.
 
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+# Códigos HTTP transitorios que justifican reintento con backoff
+GEMINI_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+GEMINI_MAX_RETRIES = 4  # 4 reintentos → hasta 5 intentos totales
+# Si el modelo primario sigue saturado tras los reintentos, caemos al "hermano"
+GEMINI_FALLBACKS = {
+    "gemini-2.5-flash": "gemini-2.5-flash-lite",
+    "gemini-2.5-flash-lite": "gemini-2.5-flash",
+}
 
 
-def _gemini_generate(model_name: str, api_key: str, system_prompt: str, user_message: str,
-                     tool_results: list | None = None) -> dict:
+def _gemini_generate(model_name: str, api_key: str, system_prompt: str,
+                     user_message: str, q: queue.Queue | None = None) -> dict:
     """
     Llamada REST a la Gemini API con el tool `google_search` (grounding nativo de 2.5).
+    Implementa reintentos con backoff exponencial (2s, 4s, 8s, 16s) ante 429/5xx
+    y errores de red transitorios.
+
     Usamos REST porque el wrapper google-generativeai 0.8.x aún no expone
     el campo `google_search` del proto (sólo el legacy `google_search_retrieval`).
     """
@@ -248,20 +260,44 @@ def _gemini_generate(model_name: str, api_key: str, system_prompt: str, user_mes
             "maxOutputTokens": 8192,
         },
     }
-    req = Request(
-        url,
-        data=json.dumps(body).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=300) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except HTTPError as exc:
-        err_body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Gemini HTTP {exc.code}: {err_body[:500]}") from exc
-    except URLError as exc:
-        raise RuntimeError(f"Gemini network error: {exc.reason}") from exc
+    payload = json.dumps(body).encode("utf-8")
+
+    last_err: Exception | None = None
+    for attempt in range(GEMINI_MAX_RETRIES + 1):
+        req = Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(req, timeout=300) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except HTTPError as exc:
+            err_body = exc.read().decode("utf-8", errors="replace")
+            if exc.code in GEMINI_RETRYABLE_STATUS and attempt < GEMINI_MAX_RETRIES:
+                wait = 2.0 * (2 ** attempt)  # 2, 4, 8, 16 s
+                if q is not None:
+                    emit(q, "step",
+                         message=f"Gemini {exc.code} UNAVAILABLE — reintento "
+                                 f"{attempt + 1}/{GEMINI_MAX_RETRIES} en {wait:.0f}s")
+                time.sleep(wait)
+                last_err = exc
+                continue
+            raise RuntimeError(f"Gemini HTTP {exc.code}: {err_body[:500]}") from exc
+        except URLError as exc:
+            if attempt < GEMINI_MAX_RETRIES:
+                wait = 2.0 * (2 ** attempt)
+                if q is not None:
+                    emit(q, "step",
+                         message=f"Gemini error de red ({exc.reason}) — reintento "
+                                 f"{attempt + 1}/{GEMINI_MAX_RETRIES} en {wait:.0f}s")
+                time.sleep(wait)
+                last_err = exc
+                continue
+            raise RuntimeError(f"Gemini network error: {exc.reason}") from exc
+
+    raise RuntimeError(f"Gemini no disponible tras {GEMINI_MAX_RETRIES} reintentos: {last_err}")
 
 
 def run_agent_gemini(ticker: str, model_name: str, session_id: str, q: queue.Queue) -> None:
@@ -283,7 +319,17 @@ def run_agent_gemini(ticker: str, model_name: str, session_id: str, q: queue.Que
 
         emit(q, "step", message="Llamada al modelo Gemini con Google Search grounding")
 
-        data = _gemini_generate(model_name, api_key, system_prompt, user_message)
+        effective_model = model_name
+        try:
+            data = _gemini_generate(effective_model, api_key, system_prompt, user_message, q=q)
+        except RuntimeError as exc:
+            fallback = GEMINI_FALLBACKS.get(model_name)
+            if fallback is None:
+                raise
+            emit(q, "step",
+                 message=f"{model_name} sigue saturado. Fallback automático → {fallback}")
+            effective_model = fallback
+            data = _gemini_generate(effective_model, api_key, system_prompt, user_message, q=q)
 
         # Extraer texto y metadata de grounding del JSON de respuesta
         report_chunks: list[str] = []
@@ -322,7 +368,7 @@ def run_agent_gemini(ticker: str, model_name: str, session_id: str, q: queue.Que
 
         emit(q, "step", message=f"Grounding total: {total_queries} búsquedas, {total_sources} fuentes")
 
-        store_report(session_id, ticker, report_text, model_name)
+        store_report(session_id, ticker, report_text, effective_model)
         emit(q, "done", report=report_text, iterations=1, session_id=session_id)
 
     except Exception as exc:  # noqa: BLE001
